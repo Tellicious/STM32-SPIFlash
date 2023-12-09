@@ -42,7 +42,6 @@ extern "C"
 /* Includes ------------------------------------------------------------------*/
 
 #include <stdint.h>
-#include "spi.h"
 
 /* Macros --------------------------------------------------------------------*/
 
@@ -119,12 +118,13 @@ typedef enum
  */
 typedef struct
 {
-	SPI_HandleTypeDef      *hSPI;
-	GPIO_TypeDef           *GPIO;
+	void      			   *hSPI;
+	void           		   *GPIO;
+	uint16_t			   pin;
 	SPIFlashManufacturer_t manufacturer;
 	SPIFlashSize_t	       size;
 	uint8_t                memType, lock;
-	uint32_t               pin, pageNum, sectorNum, blockNum;
+	uint32_t               pageNum, sectorNum, blockNum;
 } SPIFlash_t;
 
 /* Function prototypes --------------------------------------------------------*/
@@ -139,7 +139,7 @@ typedef struct
  *
  * @return SPIFLASH_SUCCESS if memory data can be read correctly and memory is initialized, SPIFLASH_ERROR otherwise
  */
-SPIFlashStatus_t SPIFlashInit(SPIFlash_t *SPIFlash, SPI_HandleTypeDef *hSPI, GPIO_TypeDef *GPIO, uint16_t pin);
+SPIFlashStatus_t SPIFlashInit(SPIFlash_t *SPIFlash, void *hSPI, void *GPIO, uint16_t pin);
 
 /*!
  * @brief Erase entire SPI flash memory

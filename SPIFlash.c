@@ -34,89 +34,10 @@
 /* Includes ------------------------------------------------------------------*/
 
 #include "SPIFlash.h"
+#include "spi.h"
 #include <string.h>
 
 /* Macros ---------------------------------------------------------------------*/
-
-
-#define SPIFLASH_PAGE_SIZE                      (1 << 8)
-#define SPIFLASH_SECTOR_SIZE                    (1 << 12)
-#define SPIFLASH_BLOCK_SIZE                     (1 << 16)
-
-#define SPIFLASH_PAGE2SECTOR(pageNumber)      (pageNumber >> 4) //((pageNumber * SPIFLASH_PAGE_SIZE) / SPIFLASH_SECTOR_SIZE)
-#define SPIFLASH_PAGE2BLOCK(pageNumber)       (pageNumber >> 8) //((pageNumber * SPIFLASH_PAGE_SIZE) / SPIFLASH_BLOCK_SIZE)
-#define SPIFLASH_SECTOR2BLOCK(sectorNumber)   (sectorNumber >> 4) //((sectorNumber * SPIFLASH_SECTOR_SIZE) / SPIFLASH_BLOCK_SIZE)
-#define SPIFLASH_SECTOR2PAGE(sectorNumber)    (sectorNumber << 4) //((sectorNumber * SPIFLASH_SECTOR_SIZE) / SPIFLASH_PAGE_SIZE)
-#define SPIFLASH_BLOCK2SECTOR(blockNumber)    (blockNumber << 4)
-#define SPIFLASH_BLOCK2PAGE(blockNumber)      (blockNumber << 8) //((blockNumber * SPIFLASH_BLOCK_SIZE) / SPIFLASH_PAGE_SIZE)
-#define SPIFLASH_PAGE2ADDRESS(pageNumber)     (pageNumber << 8) //(pageNumber * SPIFLASH_PAGE_SIZE)
-#define SPIFLASH_SECTOR2ADDRESS(sectorNumber) (sectorNumber << 12) //(sectorNumber * SPIFLASH_SECTOR_SIZE)
-#define SPIFLASH_BLOCK2ADDRESS(blockNumber)   (blockNumber << 16) //(blockNumber * SPIFLASH_BLOCK_SIZE)
-#define SPIFLASH_ADDRESS2PAGE(address)        (address >> 8) //(address / SPIFLASH_PAGE_SIZE)
-#define SPIFLASH_ADDRESS2SECTOR(address)      (address >> 12) //(address / SPIFLASH_SECTOR_SIZE)
-#define SPIFLASH_ADDRESS2BLOCK(address)       (address >> 16) //(address / SPIFLASH_BLOCK_SIZE)
-
-#define SPIFLASH_DUMMY_BYTE 0xA5
-
-#define SPIFLASH_CMD_READSFDP 0x5A
-#define SPIFLASH_CMD_ID 0x90
-#define SPIFLASH_CMD_JEDECID 0x9F
-#define SPIFLASH_CMD_UNIQUEID 0x4B
-#define SPIFLASH_CMD_WRITEDISABLE 0x04
-#define SPIFLASH_CMD_READSTATUS1 0x05
-#define SPIFLASH_CMD_READSTATUS2 0x35
-#define SPIFLASH_CMD_READSTATUS3 0x15
-#define SPIFLASH_CMD_WRITESTATUSEN 0x50
-#define SPIFLASH_CMD_WRITESTATUS1 0x01
-#define SPIFLASH_CMD_WRITESTATUS2 0x31
-#define SPIFLASH_CMD_WRITESTATUS3 0x11
-#define SPIFLASH_CMD_WRITEENABLE 0x06
-#define SPIFLASH_CMD_ADDR4BYTE_EN 0xB7
-#define SPIFLASH_CMD_ADDR4BYTE_DIS 0xE9
-#define SPIFLASH_CMD_PAGEPROG3ADD 0x02
-#define SPIFLASH_CMD_PAGEPROG4ADD 0x12
-#define SPIFLASH_CMD_READDATA3ADD 0x03
-#define SPIFLASH_CMD_READDATA4ADD 0x13
-#define SPIFLASH_CMD_FASTREAD3ADD 0x0B
-#define SPIFLASH_CMD_FASTREAD4ADD 0x0C
-#define SPIFLASH_CMD_SECTORERASE3ADD 0x20
-#define SPIFLASH_CMD_SECTORERASE4ADD 0x21
-#define SPIFLASH_CMD_BLOCKERASE3ADD 0xD8
-#define SPIFLASH_CMD_BLOCKERASE4ADD 0xDC
-#define SPIFLASH_CMD_CHIPERASE1 0x60
-#define SPIFLASH_CMD_CHIPERASE2 0xC7
-#define SPIFLASH_CMD_SUSPEND 0x75
-#define SPIFLASH_CMD_RESUME 0x7A
-#define SPIFLASH_CMD_POWERDOWN 0xB9
-#define SPIFLASH_CMD_RELEASE 0xAB
-#define SPIFLASH_CMD_FRAMSERNO 0xC3
-
-#define SPIFlashSTATUS1_BUSY (1 << 0)
-#define SPIFlashSTATUS1_WEL (1 << 1)
-#define SPIFlashSTATUS1_BP0 (1 << 2)
-#define SPIFlashSTATUS1_BP1 (1 << 3)
-#define SPIFlashSTATUS1_BP2 (1 << 4)
-#define SPIFlashSTATUS1_TP (1 << 5)
-#define SPIFlashSTATUS1_SEC (1 << 6)
-#define SPIFlashSTATUS1_SRP0 (1 << 7)
-
-#define SPIFlashSTATUS2_SRP1 (1 << 0)
-#define SPIFlashSTATUS2_QE (1 << 1)
-#define SPIFlashSTATUS2_RESERVE1 (1 << 2)
-#define SPIFlashSTATUS2_LB0 (1 << 3)
-#define SPIFlashSTATUS2_LB1 (1 << 4)
-#define SPIFlashSTATUS2_LB2 (1 << 5)
-#define SPIFlashSTATUS2_CMP (1 << 6)
-#define SPIFlashSTATUS2_SUS (1 << 7)
-
-#define SPIFlashSTATUS3_RESERVE1 (1 << 0)
-#define SPIFlashSTATUS3_RESERVE2 (1 << 1)
-#define SPIFlashSTATUS3_WPS (1 << 2)
-#define SPIFlashSTATUS3_RESERVE3 (1 << 3)
-#define SPIFlashSTATUS3_RESERVE4 (1 << 4)
-#define SPIFlashSTATUS3_DRV0 (1 << 5)
-#define SPIFlashSTATUS3_DRV1 (1 << 6)
-#define SPIFlashSTATUS3_HOLD (1 << 7)
 
 #if SPIFLASH_DEBUG == SPIFLASH_DEBUG_DISABLE
 #define dprintf(...)
@@ -126,55 +47,133 @@ extern int _write(int file, char *ptr, int len);
 #define dprintf(...) printf(__VA_ARGS__)
 #endif
 
+#define SPIFLASH_PAGE_SIZE 		(1 << 8)
+#define SPIFLASH_SECTOR_SIZE 	(1 << 12)
+#define SPIFLASH_BLOCK_SIZE 	(1 << 16)
+
+#define SPIFLASH_PAGE2SECTOR(pageNumber) 		(pageNumber >> 4)		//((pageNumber * SPIFLASH_PAGE_SIZE) / SPIFLASH_SECTOR_SIZE)
+#define SPIFLASH_PAGE2BLOCK(pageNumber) 		(pageNumber >> 8)		//((pageNumber * SPIFLASH_PAGE_SIZE) / SPIFLASH_BLOCK_SIZE)
+#define SPIFLASH_SECTOR2BLOCK(sectorNumber) 	(sectorNumber >> 4) //((sectorNumber * SPIFLASH_SECTOR_SIZE) / SPIFLASH_BLOCK_SIZE)
+#define SPIFLASH_SECTOR2PAGE(sectorNumber) 		(sectorNumber << 4)	//((sectorNumber * SPIFLASH_SECTOR_SIZE) / SPIFLASH_PAGE_SIZE)
+#define SPIFLASH_BLOCK2SECTOR(blockNumber) 		(blockNumber << 4)
+#define SPIFLASH_BLOCK2PAGE(blockNumber) 		(blockNumber << 8)		   //((blockNumber * SPIFLASH_BLOCK_SIZE) / SPIFLASH_PAGE_SIZE)
+#define SPIFLASH_PAGE2ADDRESS(pageNumber) 		(pageNumber << 8)		   //(pageNumber * SPIFLASH_PAGE_SIZE)
+#define SPIFLASH_SECTOR2ADDRESS(sectorNumber) 	(sectorNumber << 12) //(sectorNumber * SPIFLASH_SECTOR_SIZE)
+#define SPIFLASH_BLOCK2ADDRESS(blockNumber) 	(blockNumber << 16)	   //(blockNumber * SPIFLASH_BLOCK_SIZE)
+#define SPIFLASH_ADDRESS2PAGE(address) 			(address >> 8)			   //(address / SPIFLASH_PAGE_SIZE)
+#define SPIFLASH_ADDRESS2SECTOR(address) 		(address >> 12)		   //(address / SPIFLASH_SECTOR_SIZE)
+#define SPIFLASH_ADDRESS2BLOCK(address) 		(address >> 16)			   //(address / SPIFLASH_BLOCK_SIZE)
+
+#define SPIFLASH_DUMMY_BYTE 			0xA5
+
+#define SPIFLASH_CMD_READSFDP 			0x5A	
+#define SPIFLASH_CMD_ID 				0x90
+#define SPIFLASH_CMD_JEDECID 			0x9F
+#define SPIFLASH_CMD_UNIQUEID 			0x4B
+#define SPIFLASH_CMD_WRITEDISABLE 		0x04
+#define SPIFLASH_CMD_READSTATUS1 		0x05
+#define SPIFLASH_CMD_READSTATUS2 		0x35
+#define SPIFLASH_CMD_READSTATUS3 		0x15
+#define SPIFLASH_CMD_WRITESTATUSEN 		0x50
+#define SPIFLASH_CMD_WRITESTATUS1 		0x01
+#define SPIFLASH_CMD_WRITESTATUS2 		0x31
+#define SPIFLASH_CMD_WRITESTATUS3 		0x11
+#define SPIFLASH_CMD_WRITEENABLE 		0x06
+#define SPIFLASH_CMD_ADDR4BYTE_EN 		0xB7
+#define SPIFLASH_CMD_ADDR4BYTE_DIS 		0xE9
+#define SPIFLASH_CMD_PAGEPROG3ADD 		0x02
+#define SPIFLASH_CMD_PAGEPROG4ADD 		0x12
+#define SPIFLASH_CMD_READDATA3ADD 		0x03
+#define SPIFLASH_CMD_READDATA4ADD 		0x13
+#define SPIFLASH_CMD_FASTREAD3ADD 		0x0B
+#define SPIFLASH_CMD_FASTREAD4ADD 		0x0C
+#define SPIFLASH_CMD_SECTORERASE3ADD 	0x20
+#define SPIFLASH_CMD_SECTORERASE4ADD 	0x21
+#define SPIFLASH_CMD_BLOCKERASE3ADD 	0xD8
+#define SPIFLASH_CMD_BLOCKERASE4ADD 	0xDC
+#define SPIFLASH_CMD_CHIPERASE1 		0x60
+#define SPIFLASH_CMD_CHIPERASE2 		0xC7
+#define SPIFLASH_CMD_SUSPEND 			0x75
+#define SPIFLASH_CMD_RESUME 			0x7A
+#define SPIFLASH_CMD_POWERDOWN 			0xB9
+#define SPIFLASH_CMD_RELEASE 			0xAB
+#define SPIFLASH_CMD_FRAMSERNO 			0xC3
+
+#define SPIFlashSTATUS1_BUSY 		(1 << 0)
+#define SPIFlashSTATUS1_WEL 		(1 << 1)
+#define SPIFlashSTATUS1_BP0 		(1 << 2)
+#define SPIFlashSTATUS1_BP1 		(1 << 3)
+#define SPIFlashSTATUS1_BP2 		(1 << 4)
+#define SPIFlashSTATUS1_TP 			(1 << 5)
+#define SPIFlashSTATUS1_SEC 		(1 << 6)
+#define SPIFlashSTATUS1_SRP0 		(1 << 7)
+
+#define SPIFlashSTATUS2_SRP1 		(1 << 0)
+#define SPIFlashSTATUS2_QE 			(1 << 1)
+#define SPIFlashSTATUS2_RESERVE1 	(1 << 2)
+#define SPIFlashSTATUS2_LB0 		(1 << 3)
+#define SPIFlashSTATUS2_LB1 		(1 << 4)
+#define SPIFlashSTATUS2_LB2 		(1 << 5)
+#define SPIFlashSTATUS2_CMP 		(1 << 6)
+#define SPIFlashSTATUS2_SUS 		(1 << 7)
+
+#define SPIFlashSTATUS3_RESERVE1 	(1 << 0)
+#define SPIFlashSTATUS3_RESERVE2 	(1 << 1)
+#define SPIFlashSTATUS3_WPS 		(1 << 2)
+#define SPIFlashSTATUS3_RESERVE3 	(1 << 3)
+#define SPIFlashSTATUS3_RESERVE4 	(1 << 4)
+#define SPIFlashSTATUS3_DRV0 		(1 << 5)
+#define SPIFlashSTATUS3_DRV1 		(1 << 6)
+#define SPIFlashSTATUS3_HOLD 		(1 << 7)
+
 /* HW Interface  functions ----------------------------------------------------*/
 
-#define SPIFlashDelay(x) HAL_Delay(x)
+#define SPIFlashDelay(x) 		HAL_Delay(x)
 
-#define SPIFlashGetTick() HAL_GetTick()
+#define SPIFlashGetTick() 		HAL_GetTick()
 
-static inline void SPIFlashCSPin(SPIFlash_t *SPIFlash, SPIFlashStatus_t Select)
-{
-	HAL_GPIO_WritePin(SPIFlash->GPIO, SPIFlash->pin, (GPIO_PinState)Select);
-}
+#define SPIFlash_WRITE_PIN(port, pin, status) 		HAL_GPIO_WritePin(port, pin, status)
+
+#define SPIFlash_PIN_SET 		GPIO_PIN_SET
+#define SPIFlash_PIN_RESET 		GPIO_PIN_RESET
 
 static SPIFlashStatus_t SPIFlashTransmitReceive(SPIFlash_t *SPIFlash, uint8_t *Tx, uint8_t *Rx, size_t size, uint32_t Timeout)
- {
- #if (SPIFlashPLATFORM == SPIFlashPLATFORM_HAL)
- 	if (HAL_SPI_TransmitReceive(SPIFlash->hSPI, Tx, Rx, size, Timeout) == HAL_OK)
- 	{
- 		return SPIFLASH_SUCCESS;
- 	}
- 	else
- 	{
- 		return SPIFLASH_TIMEOUT;
- 	}
+{
+#if (SPIFlashPLATFORM == SPIFlashPLATFORM_HAL)
+	if (HAL_SPI_TransmitReceive(SPIFlash->hSPI, Tx, Rx, size, Timeout) == HAL_OK)
+	{
+		return SPIFLASH_SUCCESS;
+	}
+	else
+	{
+		return SPIFLASH_TIMEOUT;
+	}
 
- #elif (SPIFlashPLATFORM == SPIFlashPLATFORM_HAL_DMA)
- 	uint32_t startTime = SPIFlashGetTick();
- 	if (HAL_SPI_TransmitReceive_DMA(SPIFlash->hSPI, Tx, Rx, size) != HAL_OK)
- 	{
- 		return SPIFLASH_ERROR;
- 	}
- 	else
- 	{
- 		while (1)
- 		{
- 			SPIFlashDelay(1);
- 			if (SPIFlashGetTick() - startTime >= Timeout)
- 			{
- 				HAL_SPI_DMAStop(SPIFlash->hSPI);
- 				return SPIFLASH_TIMEOUT;
- 			}
- 			if (HAL_SPI_GetState(SPIFlash->hSPI) == HAL_SPI_STATE_READY)
- 			{
- 				retVal = SPIFLASH_SUCCESS;
- 				return SPIFLASH_SUCCESS;
- 			}
- 		}
- 	}
- #endif
- }
-
+#elif (SPIFlashPLATFORM == SPIFlashPLATFORM_HAL_DMA)
+	uint32_t startTime = SPIFlashGetTick();
+	if (HAL_SPI_TransmitReceive_DMA(SPIFlash->hSPI, Tx, Rx, size) != HAL_OK)
+	{
+		return SPIFLASH_ERROR;
+	}
+	else
+	{
+		while (1)
+		{
+			SPIFlashDelay(1);
+			if (SPIFlashGetTick() - startTime >= Timeout)
+			{
+				HAL_SPI_DMAStop(SPIFlash->hSPI);
+				return SPIFLASH_TIMEOUT;
+			}
+			if (HAL_SPI_GetState(SPIFlash->hSPI) == HAL_SPI_STATE_READY)
+			{
+				retVal = SPIFLASH_SUCCESS;
+				return SPIFLASH_SUCCESS;
+			}
+		}
+	}
+#endif
+}
 
 /* Static  functions ----------------------------------------------------------*/
 
@@ -196,13 +195,13 @@ static SPIFlashStatus_t SPIFlashWriteEnable(SPIFlash_t *SPIFlash)
 {
 	SPIFlashStatus_t retVal = SPIFLASH_SUCCESS;
 	uint8_t tx[1] = {SPIFLASH_CMD_WRITEENABLE};
-	SPIFlashCSPin(SPIFlash, 0);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 	if (SPIFlashTransmitReceive(SPIFlash, tx, tx, 1, 100) == SPIFLASH_ERROR)
 	{
 		retVal = SPIFLASH_ERROR;
 		dprintf("SPIFlashWriteEnable() Error\r\n");
 	}
-	SPIFlashCSPin(SPIFlash, 1);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 	return retVal;
 }
 
@@ -210,13 +209,13 @@ static SPIFlashStatus_t SPIFlashWriteDisable(SPIFlash_t *SPIFlash)
 {
 	SPIFlashStatus_t retVal = SPIFLASH_SUCCESS;
 	uint8_t tx[1] = {SPIFLASH_CMD_WRITEDISABLE};
-	SPIFlashCSPin(SPIFlash, 0);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 	if (SPIFlashTransmitReceive(SPIFlash, tx, tx, 1, 100) == SPIFLASH_ERROR)
 	{
 		dprintf("SPIFlashWriteDisable() Error\r\n");
 		retVal = SPIFLASH_ERROR;
 	}
-	SPIFlashCSPin(SPIFlash, 1);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 	return retVal;
 }
 
@@ -225,12 +224,12 @@ static uint8_t SPIFlashReadReg1(SPIFlash_t *SPIFlash)
 	uint8_t retVal = 0;
 	uint8_t tx[2] = {SPIFLASH_CMD_READSTATUS1, SPIFLASH_DUMMY_BYTE};
 	uint8_t rx[2];
-	SPIFlashCSPin(SPIFlash, 0);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 	if (SPIFlashTransmitReceive(SPIFlash, tx, rx, 2, 100) == SPIFLASH_SUCCESS)
 	{
 		retVal = rx[1];
 	}
-	SPIFlashCSPin(SPIFlash, 1);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 	return retVal;
 }
 
@@ -239,12 +238,12 @@ static uint8_t SPIFlashReadReg2(SPIFlash_t *SPIFlash)
 	uint8_t retVal = 0;
 	uint8_t tx[2] = {SPIFLASH_CMD_READSTATUS2, SPIFLASH_DUMMY_BYTE};
 	uint8_t rx[2];
-	SPIFlashCSPin(SPIFlash, 0);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 	if (SPIFlashTransmitReceive(SPIFlash, tx, rx, 2, 100) == SPIFLASH_SUCCESS)
 	{
 		retVal = rx[1];
 	}
-	SPIFlashCSPin(SPIFlash, 1);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 	return retVal;
 }
 
@@ -253,12 +252,12 @@ static uint8_t SPIFlashReadReg3(SPIFlash_t *SPIFlash)
 	uint8_t retVal = 0;
 	uint8_t tx[2] = {SPIFLASH_CMD_READSTATUS3, SPIFLASH_DUMMY_BYTE};
 	uint8_t rx[2];
-	SPIFlashCSPin(SPIFlash, 0);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 	if (SPIFlashTransmitReceive(SPIFlash, tx, rx, 2, 100) == SPIFLASH_SUCCESS)
 	{
 		retVal = rx[1];
 	}
-	SPIFlashCSPin(SPIFlash, 1);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 	return retVal;
 }
 
@@ -268,20 +267,20 @@ static SPIFlashStatus_t SPIFlashWriteReg1(SPIFlash_t *SPIFlash, uint8_t data)
 	uint8_t tx[2] = {SPIFLASH_CMD_WRITESTATUS1, data};
 	uint8_t cmd = SPIFLASH_CMD_WRITESTATUSEN;
 
-	SPIFlashCSPin(SPIFlash, 0);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 	if (SPIFlashTransmitReceive(SPIFlash, &cmd, &cmd, 1, 100) == SPIFLASH_ERROR)
 	{
-		SPIFlashCSPin(SPIFlash, 1);
+		SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 		return SPIFLASH_ERROR;
 	}
-	SPIFlashCSPin(SPIFlash, 1);
-	SPIFlashCSPin(SPIFlash, 0);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 	if (SPIFlashTransmitReceive(SPIFlash, tx, tx, 2, 100) == SPIFLASH_ERROR)
 	{
-		SPIFlashCSPin(SPIFlash, 1);
+		SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 		return SPIFLASH_ERROR;
 	}
-	SPIFlashCSPin(SPIFlash, 1);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 
 	return SPIFLASH_SUCCESS;
 }
@@ -291,20 +290,20 @@ static SPIFlashStatus_t SPIFlashWriteReg2(SPIFlash_t *SPIFlash, uint8_t data)
 	uint8_t tx[2] = {SPIFLASH_CMD_WRITESTATUS2, data};
 	uint8_t cmd = SPIFLASH_CMD_WRITESTATUSEN;
 
-	SPIFlashCSPin(SPIFlash, 0);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 	if (SPIFlashTransmitReceive(SPIFlash, &cmd, &cmd, 1, 100) == SPIFLASH_ERROR)
 	{
-		SPIFlashCSPin(SPIFlash, 1);
+		SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 		return SPIFLASH_ERROR;
 	}
-	SPIFlashCSPin(SPIFlash, 1);
-	SPIFlashCSPin(SPIFlash, 0);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 	if (SPIFlashTransmitReceive(SPIFlash, tx, tx, 2, 100) == SPIFLASH_ERROR)
 	{
-		SPIFlashCSPin(SPIFlash, 1);
+		SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 		return SPIFLASH_ERROR;
 	}
-	SPIFlashCSPin(SPIFlash, 1);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 
 	return SPIFLASH_SUCCESS;
 }
@@ -314,20 +313,20 @@ static SPIFlashStatus_t SPIFlashWriteReg3(SPIFlash_t *SPIFlash, uint8_t data)
 	uint8_t tx[2] = {SPIFLASH_CMD_WRITESTATUS3, data};
 	uint8_t cmd = SPIFLASH_CMD_WRITESTATUSEN;
 
-	SPIFlashCSPin(SPIFlash, 0);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 	if (SPIFlashTransmitReceive(SPIFlash, &cmd, &cmd, 1, 100) == SPIFLASH_ERROR)
 	{
-		SPIFlashCSPin(SPIFlash, 1);
+		SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 		return SPIFLASH_ERROR;
 	}
-	SPIFlashCSPin(SPIFlash, 1);
-	SPIFlashCSPin(SPIFlash, 0);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 	if (SPIFlashTransmitReceive(SPIFlash, tx, tx, 2, 100) == SPIFLASH_ERROR)
 	{
-		SPIFlashCSPin(SPIFlash, 1);
+		SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 		return SPIFLASH_ERROR;
 	}
-	SPIFlashCSPin(SPIFlash, 1);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 
 	return SPIFLASH_SUCCESS;
 }
@@ -355,13 +354,13 @@ static SPIFlashStatus_t SPIFlashFindChip(SPIFlash_t *SPIFlash)
 	uint8_t tx[4] = {SPIFLASH_CMD_JEDECID, 0xFF, 0xFF, 0xFF};
 	uint8_t rx[4];
 
-	SPIFlashCSPin(SPIFlash, 0);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 	if (SPIFlashTransmitReceive(SPIFlash, tx, rx, 4, 100) == SPIFLASH_ERROR)
 	{
-		SPIFlashCSPin(SPIFlash, 1);
+		SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 		return SPIFLASH_ERROR;
 	}
-	SPIFlashCSPin(SPIFlash, 1);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 	dprintf("CHIP ID: 0x%02X%02X%02X\r\n", rx[1], rx[2], rx[3]);
 	SPIFlash->manufacturer = rx[1];
 	SPIFlash->memType = rx[2];
@@ -511,16 +510,16 @@ static SPIFlashStatus_t SPIFlashWriteFn(SPIFlash_t *SPIFlash, uint32_t pageNumbe
 		address = SPIFLASH_PAGE2ADDRESS(pageNumber) + offset;
 
 #if SPIFLASH_DEBUG == SPIFLASH_DEBUG_FULL
-			dprintf("SPI FLASH WRITING {\r\n0x%02X", data[0]);
-			for (int i = 1; i < size; i++)
+		dprintf("SPI FLASH WRITING {\r\n0x%02X", data[0]);
+		for (int i = 1; i < size; i++)
+		{
+			if (i % 8 == 0)
 			{
-				if (i % 8 == 0)
-				{
-					dprintf("\r\n");
-				}
-				dprintf(", 0x%02X", data[i]);
+				dprintf("\r\n");
 			}
-			dprintf("\r\n}\r\n");
+			dprintf(", 0x%02X", data[i]);
+		}
+		dprintf("\r\n}\r\n");
 #endif
 
 		if (SPIFlashWriteEnable(SPIFlash) == SPIFLASH_ERROR)
@@ -528,7 +527,7 @@ static SPIFlashStatus_t SPIFlashWriteFn(SPIFlash_t *SPIFlash, uint32_t pageNumbe
 			break;
 		}
 
-		SPIFlashCSPin(SPIFlash, 0);
+		SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 		if (SPIFlash->blockNum >= 512)
 		{
 			tx[0] = SPIFLASH_CMD_PAGEPROG4ADD;
@@ -538,7 +537,7 @@ static SPIFlashStatus_t SPIFlashWriteFn(SPIFlash_t *SPIFlash, uint32_t pageNumbe
 			tx[4] = (address & 0x000000FF);
 			if (SPIFlashTransmitReceive(SPIFlash, tx, tx, 5, 100) == SPIFLASH_ERROR)
 			{
-				SPIFlashCSPin(SPIFlash, 1);
+				SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 				break;
 			}
 		}
@@ -550,16 +549,16 @@ static SPIFlashStatus_t SPIFlashWriteFn(SPIFlash_t *SPIFlash, uint32_t pageNumbe
 			tx[3] = (address & 0x000000FF);
 			if (SPIFlashTransmitReceive(SPIFlash, tx, tx, 4, 100) == SPIFLASH_ERROR)
 			{
-				SPIFlashCSPin(SPIFlash, 1);
+				SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 				break;
 			}
 		}
 		if (SPIFlashTransmitReceive(SPIFlash, data, data, size, 1000) == SPIFLASH_ERROR)
 		{
-			SPIFlashCSPin(SPIFlash, 1);
+			SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 			break;
 		}
-		SPIFlashCSPin(SPIFlash, 1);
+		SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 		if (SPIFlashWaitForWriting(SPIFlash, 100))
 		{
 			dprintf("SPIFlashWritePage() %d BYTES WRITTEN IN %ld ms\r\n", (uint16_t)size, SPIFlashGetTick() - dbgTime);
@@ -583,7 +582,7 @@ static SPIFlashStatus_t SPIFlashReadFn(SPIFlash_t *SPIFlash, uint32_t address, u
 		uint32_t dbgTime = SPIFlashGetTick();
 #endif
 		dprintf("SPIFlashReadAddress() START ADDRESS %ld\r\n", address);
-		SPIFlashCSPin(SPIFlash, 0);
+		SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 		if (SPIFlash->blockNum >= 512)
 		{
 			tx[0] = SPIFLASH_CMD_READDATA4ADD;
@@ -593,7 +592,7 @@ static SPIFlashStatus_t SPIFlashReadFn(SPIFlash_t *SPIFlash, uint32_t address, u
 			tx[4] = (address & 0x000000FF);
 			if (SPIFlashTransmitReceive(SPIFlash, tx, tx, 5, 100) == SPIFLASH_ERROR)
 			{
-				SPIFlashCSPin(SPIFlash, 1);
+				SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 				break;
 			}
 		}
@@ -605,16 +604,16 @@ static SPIFlashStatus_t SPIFlashReadFn(SPIFlash_t *SPIFlash, uint32_t address, u
 			tx[3] = (address & 0x000000FF);
 			if (SPIFlashTransmitReceive(SPIFlash, tx, tx, 4, 100) == SPIFLASH_ERROR)
 			{
-				SPIFlashCSPin(SPIFlash, 1);
+				SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 				break;
 			}
 		}
 		if (SPIFlashTransmitReceive(SPIFlash, data, data, size, 2000) == SPIFLASH_ERROR)
 		{
-			SPIFlashCSPin(SPIFlash, 1);
+			SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 			break;
 		}
-		SPIFlashCSPin(SPIFlash, 1);
+		SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 		dprintf("SPIFlashReadAddress() %d BYTES READ IN %ld ms\r\n", (uint16_t)size, SPIFlashGetTick() - dbgTime);
 
 #if SPIFLASH_DEBUG == SPIFLASH_DEBUG_FULL
@@ -639,7 +638,7 @@ static SPIFlashStatus_t SPIFlashReadFn(SPIFlash_t *SPIFlash, uint32_t address, u
 
 /* Private  functions ---------------------------------------------------------*/
 
-SPIFlashStatus_t SPIFlashInit(SPIFlash_t *SPIFlash, SPI_HandleTypeDef *hSPI, GPIO_TypeDef *GPIO, uint16_t pin)
+SPIFlashStatus_t SPIFlashInit(SPIFlash_t *SPIFlash, void *hSPI, void *GPIO, uint16_t pin)
 {
 
 	if ((SPIFlash == NULL) || (hSPI == NULL) || (GPIO == NULL) || (SPIFlash->size != SPIFLASH_SIZE_ERROR))
@@ -652,7 +651,7 @@ SPIFlashStatus_t SPIFlashInit(SPIFlash_t *SPIFlash, SPI_HandleTypeDef *hSPI, GPI
 	SPIFlash->GPIO = GPIO;
 	SPIFlash->pin = pin;
 	SPIFlash->size = SPIFLASH_SIZE_ERROR;
-	SPIFlashCSPin(SPIFlash, 1);
+	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 
 	/* Wait for stable VCC */
 	while (SPIFlashGetTick() < 20)
@@ -688,13 +687,13 @@ SPIFlashStatus_t SPIFlashEraseChip(SPIFlash_t *SPIFlash)
 		{
 			break;
 		}
-		SPIFlashCSPin(SPIFlash, 0);
+		SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 		if (SPIFlashTransmitReceive(SPIFlash, tx, tx, 1, 100) == SPIFLASH_ERROR)
 		{
-			SPIFlashCSPin(SPIFlash, 1);
+			SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 			break;
 		}
-		SPIFlashCSPin(SPIFlash, 1);
+		SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 		if (SPIFlashWaitForWriting(SPIFlash, SPIFlash->blockNum * 1000))
 		{
 			dprintf("SPIFlashEraseChip() DONE IN %ld ms\r\n", SPIFlashGetTick() - dbgTime);
@@ -729,7 +728,7 @@ SPIFlashStatus_t SPIFlashEraseSector(SPIFlash_t *SPIFlash, uint32_t sector)
 		{
 			break;
 		}
-		SPIFlashCSPin(SPIFlash, 0);
+		SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 		if (SPIFlash->blockNum >= 512)
 		{
 			tx[0] = SPIFLASH_CMD_SECTORERASE4ADD;
@@ -739,7 +738,7 @@ SPIFlashStatus_t SPIFlashEraseSector(SPIFlash_t *SPIFlash, uint32_t sector)
 			tx[4] = (address & 0x000000FF);
 			if (SPIFlashTransmitReceive(SPIFlash, tx, tx, 5, 100) == SPIFLASH_ERROR)
 			{
-				SPIFlashCSPin(SPIFlash, 1);
+				SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 				break;
 			}
 		}
@@ -751,11 +750,11 @@ SPIFlashStatus_t SPIFlashEraseSector(SPIFlash_t *SPIFlash, uint32_t sector)
 			tx[3] = (address & 0x000000FF);
 			if (SPIFlashTransmitReceive(SPIFlash, tx, tx, 4, 100) == SPIFLASH_ERROR)
 			{
-				SPIFlashCSPin(SPIFlash, 1);
+				SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 				break;
 			}
 		}
-		SPIFlashCSPin(SPIFlash, 1);
+		SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 		if (SPIFlashWaitForWriting(SPIFlash, 1000))
 		{
 			dprintf("SPIFlashEraseSector() DONE AFTER %ld ms\r\n", SPIFlashGetTick() - dbgTime);
@@ -790,7 +789,7 @@ SPIFlashStatus_t SPIFlashEraseBlock(SPIFlash_t *SPIFlash, uint32_t block)
 		{
 			break;
 		}
-		SPIFlashCSPin(SPIFlash, 0);
+		SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 		if (SPIFlash->blockNum >= 512)
 		{
 			tx[0] = SPIFLASH_CMD_BLOCKERASE4ADD;
@@ -800,7 +799,7 @@ SPIFlashStatus_t SPIFlashEraseBlock(SPIFlash_t *SPIFlash, uint32_t block)
 			tx[4] = (address & 0x000000FF);
 			if (SPIFlashTransmitReceive(SPIFlash, tx, tx, 5, 100) == SPIFLASH_ERROR)
 			{
-				SPIFlashCSPin(SPIFlash, 1);
+				SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 				break;
 			}
 		}
@@ -812,11 +811,11 @@ SPIFlashStatus_t SPIFlashEraseBlock(SPIFlash_t *SPIFlash, uint32_t block)
 			tx[3] = (address & 0x000000FF);
 			if (SPIFlashTransmitReceive(SPIFlash, tx, tx, 4, 100) == SPIFLASH_ERROR)
 			{
-				SPIFlashCSPin(SPIFlash, 1);
+				SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 				break;
 			}
 		}
-		SPIFlashCSPin(SPIFlash, 1);
+		SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 		if (SPIFlashWaitForWriting(SPIFlash, 3000))
 		{
 			dprintf("SPIFlashEraseBlock() DONE AFTER %ld ms\r\n", SPIFlashGetTick() - dbgTime);
