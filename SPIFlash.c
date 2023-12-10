@@ -191,66 +191,23 @@ static void SPIFlashUnLock(SPIFlash_t *SPIFlash)
 	SPIFlash->lock = 0;
 }
 
-static SPIFlashStatus_t SPIFlashWriteEnable(SPIFlash_t *SPIFlash)
+static SPIFlashStatus_t SPIFlashSendCmd(SPIFlash_t *SPIFlash, uint8_t cmd)
 {
 	SPIFlashStatus_t retVal = SPIFLASH_SUCCESS;
-	uint8_t tx[1] = {SPIFLASH_CMD_WRITEENABLE};
+	uint8_t tx[1] = {cmd};
 	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 	if (SPIFlashTransmitReceive(SPIFlash, tx, tx, 1, 100) == SPIFLASH_ERROR)
 	{
 		retVal = SPIFLASH_ERROR;
-		dprintf("SPIFlashWriteEnable() Error\r\n");
 	}
 	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
 	return retVal;
 }
 
-static SPIFlashStatus_t SPIFlashWriteDisable(SPIFlash_t *SPIFlash)
-{
-	SPIFlashStatus_t retVal = SPIFLASH_SUCCESS;
-	uint8_t tx[1] = {SPIFLASH_CMD_WRITEDISABLE};
-	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
-	if (SPIFlashTransmitReceive(SPIFlash, tx, tx, 1, 100) == SPIFLASH_ERROR)
-	{
-		dprintf("SPIFlashWriteDisable() Error\r\n");
-		retVal = SPIFLASH_ERROR;
-	}
-	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
-	return retVal;
-}
-
-static uint8_t SPIFlashReadReg1(SPIFlash_t *SPIFlash)
+static uint8_t SPIFlashReadReg(SPIFlash_t *SPIFlash, uint8_t SPIFlashReg)
 {
 	uint8_t retVal = 0;
-	uint8_t tx[2] = {SPIFLASH_CMD_READSTATUS1, SPIFLASH_DUMMY_BYTE};
-	uint8_t rx[2];
-	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
-	if (SPIFlashTransmitReceive(SPIFlash, tx, rx, 2, 100) == SPIFLASH_SUCCESS)
-	{
-		retVal = rx[1];
-	}
-	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
-	return retVal;
-}
-
-static uint8_t SPIFlashReadReg2(SPIFlash_t *SPIFlash)
-{
-	uint8_t retVal = 0;
-	uint8_t tx[2] = {SPIFLASH_CMD_READSTATUS2, SPIFLASH_DUMMY_BYTE};
-	uint8_t rx[2];
-	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
-	if (SPIFlashTransmitReceive(SPIFlash, tx, rx, 2, 100) == SPIFLASH_SUCCESS)
-	{
-		retVal = rx[1];
-	}
-	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_SET);
-	return retVal;
-}
-
-static uint8_t SPIFlashReadReg3(SPIFlash_t *SPIFlash)
-{
-	uint8_t retVal = 0;
-	uint8_t tx[2] = {SPIFLASH_CMD_READSTATUS3, SPIFLASH_DUMMY_BYTE};
+	uint8_t tx[2] = {SPIFlashReg, SPIFLASH_DUMMY_BYTE};
 	uint8_t rx[2];
 	SPIFlash_WRITE_PIN(SPIFlash->GPIO, SPIFlash->pin, SPIFlash_PIN_RESET);
 	if (SPIFlashTransmitReceive(SPIFlash, tx, rx, 2, 100) == SPIFLASH_SUCCESS)
@@ -341,7 +298,7 @@ static SPIFlashStatus_t SPIFlashWaitForWriting(SPIFlash_t *SPIFlash, uint32_t Ti
 		{
 			return SPIFLASH_TIMEOUT;
 		}
-		if ((SPIFlashReadReg1(SPIFlash) & SPIFlashSTATUS1_BUSY) == 0)
+		if ((SPIFlashReadReg(SPIFlash, SPIFLASH_CMD_READSTATUS1) & SPIFlashSTATUS1_BUSY) == 0)
 		{
 			return SPIFLASH_SUCCESS;
 		}
@@ -478,9 +435,9 @@ static SPIFlashStatus_t SPIFlashFindChip(SPIFlash_t *SPIFlash)
 	dprintf("SPI FLASH BLOCK CNT: %ld\r\n", SPIFlash->blockNum);
 	dprintf("SPI FLASH SECTOR CNT: %ld\r\n", SPIFlash->sectorNum);
 	dprintf("SPI FLASH PAGE CNT: %ld\r\n", SPIFlash->pageNum);
-	dprintf("SPI FLASH STATUS1: 0x%02X\r\n", SPIFlashReadReg1(SPIFlash));
-	dprintf("SPI FLASH STATUS2: 0x%02X\r\n", SPIFlashReadReg2(SPIFlash));
-	dprintf("SPI FLASH STATUS3: 0x%02X\r\n", SPIFlashReadReg3(SPIFlash));
+	dprintf("SPI FLASH STATUS1: 0x%02X\r\n", SPIFlashReadReg(SPIFlash, SPIFLASH_CMD_READSTATUS1));
+	dprintf("SPI FLASH STATUS2: 0x%02X\r\n", SPIFlashReadReg(SPIFlash, SPIFLASH_CMD_READSTATUS2));
+	dprintf("SPI FLASH STATUS3: 0x%02X\r\n", SPIFlashReadReg(SPIFlash, SPIFLASH_CMD_READSTATUS3));
 	return SPIFLASH_SUCCESS;
 }
 
@@ -522,7 +479,7 @@ static SPIFlashStatus_t SPIFlashWriteFn(SPIFlash_t *SPIFlash, uint32_t pageNumbe
 		dprintf("\r\n}\r\n");
 #endif
 
-		if (SPIFlashWriteEnable(SPIFlash) == SPIFLASH_ERROR)
+		if (SPIFlashSendCmd(SPIFlash, SPIFLASH_CMD_WRITEENABLE) == SPIFLASH_ERROR)
 		{
 			break;
 		}
@@ -567,7 +524,7 @@ static SPIFlashStatus_t SPIFlashWriteFn(SPIFlash_t *SPIFlash, uint32_t pageNumbe
 
 	} while (0);
 
-	SPIFlashWriteDisable(SPIFlash);
+	SPIFlashSendCmd(SPIFlash, SPIFLASH_CMD_WRITEDISABLE);
 	return retVal;
 }
 
@@ -659,7 +616,7 @@ SPIFlashStatus_t SPIFlashInit(SPIFlash_t *SPIFlash, void *hSPI, void *GPIO, uint
 		SPIFlashDelay(1);
 	}
 
-	if (SPIFlashWriteDisable(SPIFlash) == SPIFLASH_ERROR)
+	if (SPIFlashSendCmd(SPIFlash, SPIFLASH_CMD_WRITEDISABLE) == SPIFLASH_ERROR)
 	{
 		return SPIFLASH_ERROR;
 	}
@@ -683,7 +640,7 @@ SPIFlashStatus_t SPIFlashEraseChip(SPIFlash_t *SPIFlash)
 		uint32_t dbgTime = SPIFlashGetTick();
 #endif
 		dprintf("SPIFlashEraseChip() START\r\n");
-		if (SPIFlashWriteEnable(SPIFlash) == SPIFLASH_ERROR)
+		if (SPIFlashSendCmd(SPIFlash, SPIFLASH_CMD_WRITEENABLE) == SPIFLASH_ERROR)
 		{
 			break;
 		}
@@ -702,7 +659,7 @@ SPIFlashStatus_t SPIFlashEraseChip(SPIFlash_t *SPIFlash)
 
 	} while (0);
 
-	SPIFlashWriteDisable(SPIFlash);
+	SPIFlashSendCmd(SPIFlash, SPIFLASH_CMD_WRITEDISABLE);
 	SPIFlashUnLock(SPIFlash);
 	return retVal;
 }
@@ -724,7 +681,7 @@ SPIFlashStatus_t SPIFlashEraseSector(SPIFlash_t *SPIFlash, uint32_t sector)
 			dprintf("SPIFlashEraseSector() ERROR SECTOR NUMBER\r\n");
 			break;
 		}
-		if (SPIFlashWriteEnable(SPIFlash) == SPIFLASH_ERROR)
+		if (SPIFlashSendCmd(SPIFlash, SPIFLASH_CMD_WRITEENABLE) == SPIFLASH_ERROR)
 		{
 			break;
 		}
@@ -763,7 +720,7 @@ SPIFlashStatus_t SPIFlashEraseSector(SPIFlash_t *SPIFlash, uint32_t sector)
 
 	} while (0);
 
-	SPIFlashWriteDisable(SPIFlash);
+	SPIFlashSendCmd(SPIFlash, SPIFLASH_CMD_WRITEDISABLE);
 	SPIFlashUnLock(SPIFlash);
 	return retVal;
 }
@@ -785,7 +742,7 @@ SPIFlashStatus_t SPIFlashEraseBlock(SPIFlash_t *SPIFlash, uint32_t block)
 			dprintf("SPIFlashEraseBlock() ERROR BLOCK NUMBER\r\n");
 			break;
 		}
-		if (SPIFlashWriteEnable(SPIFlash) == SPIFLASH_ERROR)
+		if (SPIFlashSendCmd(SPIFlash, SPIFLASH_CMD_WRITEENABLE) == SPIFLASH_ERROR)
 		{
 			break;
 		}
@@ -824,7 +781,7 @@ SPIFlashStatus_t SPIFlashEraseBlock(SPIFlash_t *SPIFlash, uint32_t block)
 
 	} while (0);
 
-	SPIFlashWriteDisable(SPIFlash);
+	SPIFlashSendCmd(SPIFlash, SPIFLASH_CMD_WRITEDISABLE);
 	SPIFlashUnLock(SPIFlash);
 	return retVal;
 }
